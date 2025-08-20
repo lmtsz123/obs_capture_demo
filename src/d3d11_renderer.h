@@ -14,6 +14,7 @@ public:
     ~D3D11Renderer() override;
 
     bool Initialize() override;
+    bool Initialize(void* windowHandle);  // 接收SDL2窗口句柄
     void Cleanup() override;
     
     bool ConvertFrame(const uint8_t* nv12Data, int width, int height, 
@@ -59,6 +60,7 @@ private:
     };
     
     bool CreateDevice();
+    bool CreateSwapChain(void* windowHandle);
     bool CreateShaders();
     bool CreateBuffers();
     bool CreateTextures(int width, int height);

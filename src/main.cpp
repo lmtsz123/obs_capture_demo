@@ -1,5 +1,6 @@
 #include <SDL.h>
 #include <SDL_opengl.h>
+#include <SDL_syswm.h>
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -11,6 +12,7 @@
 #include "dshow_capture.h"
 #include "renderer_interface.h"
 #include "nv12_to_rgba_shader.h"  // 为了使用InitializeOpenGLExtensions函数
+#include "d3d11_renderer.h"
 
 class Application {
 private:
@@ -48,39 +50,55 @@ public:
             return false;
         }
         
-        // 设置OpenGL属性
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-        
-        // 创建窗口
-        m_window = SDL_CreateWindow("OBS Virtual Camera Capture",
-                                  SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                  WINDOW_WIDTH, WINDOW_HEIGHT,
-                                  SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
-        
-        if (!m_window) {
-            std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
-            return false;
-        }
-        
-        // 创建OpenGL上下文
-        m_glContext = SDL_GL_CreateContext(m_window);
-        if (!m_glContext) {
-            std::cerr << "SDL_GL_CreateContext failed: " << SDL_GetError() << std::endl;
-            return false;
-        }
-        
-        // 启用垂直同步
-        SDL_GL_SetSwapInterval(1);
-        
-        // 初始化OpenGL
-        glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        
         // 选择渲染器类型（可以通过命令行参数或配置文件选择）
-        RendererType rendererType = RendererType::OpenGL;  // 默认使用OpenGL
+        RendererType rendererType = RendererType::Direct3D11;  // 默认使用Direct3D11
+        
+        // 根据渲染器类型创建窗口
+        if (rendererType == RendererType::OpenGL) {
+            // 设置OpenGL属性
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+            SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+            
+            // 创建OpenGL窗口
+            m_window = SDL_CreateWindow("OBS Virtual Camera Capture",
+                                      SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                                      WINDOW_WIDTH, WINDOW_HEIGHT,
+                                      SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+            
+            if (!m_window) {
+                std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
+                return false;
+            }
+            
+            // 创建OpenGL上下文
+            m_glContext = SDL_GL_CreateContext(m_window);
+            if (!m_glContext) {
+                std::cerr << "SDL_GL_CreateContext failed: " << SDL_GetError() << std::endl;
+                return false;
+            }
+            
+            // 启用垂直同步
+            SDL_GL_SetSwapInterval(1);
+            
+            // 初始化OpenGL
+            glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        } else {
+            // 创建D3D11兼容的窗口（不使用OpenGL标志）
+            m_window = SDL_CreateWindow("OBS Virtual Camera Capture",
+                                      SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                                      WINDOW_WIDTH, WINDOW_HEIGHT,
+                                      SDL_WINDOW_SHOWN);
+            
+            if (!m_window) {
+                std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
+                return false;
+            }
+            
+            m_glContext = nullptr;  // D3D11不需要OpenGL上下文
+        }
         
         // 如果使用OpenGL，初始化扩展函数
         if (rendererType == RendererType::OpenGL) {
@@ -98,7 +116,24 @@ public:
         }
         
         // 初始化渲染器
-        if (!m_renderer->Initialize()) {
+        bool rendererInitialized = false;
+        if (rendererType == RendererType::Direct3D11) {
+            // D3D11渲染器需要窗口句柄
+            SDL_SysWMinfo wmInfo;
+            SDL_VERSION(&wmInfo.version);
+            if (SDL_GetWindowWMInfo(m_window, &wmInfo)) {
+                HWND hwnd = wmInfo.info.win.window;
+                D3D11Renderer* d3d11Renderer = static_cast<D3D11Renderer*>(m_renderer);
+                rendererInitialized = d3d11Renderer->Initialize(hwnd);
+            } else {
+                std::cerr << "Failed to get window handle for D3D11" << std::endl;
+            }
+        } else {
+            // OpenGL渲染器使用默认初始化
+            rendererInitialized = m_renderer->Initialize();
+        }
+        
+        if (!rendererInitialized) {
             std::cerr << "Failed to initialize renderer" << std::endl;
             return false;
         }

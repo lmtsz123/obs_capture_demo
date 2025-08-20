@@ -63,8 +63,33 @@ D3D11Renderer::~D3D11Renderer() {
 }
 
 bool D3D11Renderer::Initialize() {
+    // 默认初始化，不创建SwapChain（用于离屏渲染）
     if (!CreateDevice()) {
         std::cerr << "Failed to create D3D11 device" << std::endl;
+        return false;
+    }
+    
+    if (!CreateShaders()) {
+        std::cerr << "Failed to create shaders" << std::endl;
+        return false;
+    }
+    
+    if (!CreateBuffers()) {
+        std::cerr << "Failed to create buffers" << std::endl;
+        return false;
+    }
+    
+    return true;
+}
+
+bool D3D11Renderer::Initialize(void* windowHandle) {
+    if (!CreateDevice()) {
+        std::cerr << "Failed to create D3D11 device" << std::endl;
+        return false;
+    }
+    
+    if (!CreateSwapChain(windowHandle)) {
+        std::cerr << "Failed to create D3D11 swap chain" << std::endl;
         return false;
     }
     
@@ -133,6 +158,52 @@ bool D3D11Renderer::CreateDevice() {
     );
     
     return SUCCEEDED(hr);
+}
+
+bool D3D11Renderer::CreateSwapChain(void* windowHandle) {
+    HRESULT hr;
+    
+    // 获取DXGI工厂
+    ComPtr<IDXGIFactory1> dxgiFactory;
+    ComPtr<IDXGIDevice> dxgiDevice;
+    ComPtr<IDXGIAdapter> dxgiAdapter;
+    
+    hr = m_device->QueryInterface(__uuidof(IDXGIDevice), (void**)&dxgiDevice);
+    if (FAILED(hr)) return false;
+    
+    hr = dxgiDevice->GetAdapter(&dxgiAdapter);
+    if (FAILED(hr)) return false;
+    
+    hr = dxgiAdapter->GetParent(__uuidof(IDXGIFactory1), (void**)&dxgiFactory);
+    if (FAILED(hr)) return false;
+    
+    // 配置SwapChain描述
+    DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
+    swapChainDesc.BufferCount = 1;
+    swapChainDesc.BufferDesc.Width = 1080;  // 使用视频尺寸
+    swapChainDesc.BufferDesc.Height = 1920;
+    swapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    swapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
+    swapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
+    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swapChainDesc.OutputWindow = (HWND)windowHandle;
+    swapChainDesc.SampleDesc.Count = 1;
+    swapChainDesc.SampleDesc.Quality = 0;
+    swapChainDesc.Windowed = TRUE;
+    
+    hr = dxgiFactory->CreateSwapChain(m_device.Get(), &swapChainDesc, &m_swapChain);
+    if (FAILED(hr)) return false;
+    
+    // 创建渲染目标视图
+    ComPtr<ID3D11Texture2D> backBuffer;
+    hr = m_swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backBuffer);
+    if (FAILED(hr)) return false;
+    
+    hr = m_device->CreateRenderTargetView(backBuffer.Get(), nullptr, &m_renderTargetView);
+    if (FAILED(hr)) return false;
+    
+    std::cout << "D3D11 SwapChain and RenderTargetView created successfully" << std::endl;
+    return true;
 }
 
 bool D3D11Renderer::CreateShaders() {
@@ -378,12 +449,14 @@ bool D3D11Renderer::UpdateNV12Textures(const uint8_t* nv12Data, int width, int h
 }
 
 void D3D11Renderer::SetupRenderState() {
-    // 设置视口
+    // 设置视口 - 使用正确的窗口尺寸
     D3D11_VIEWPORT viewport = {};
-    viewport.Width = static_cast<float>(1920);  // 这里应该使用实际的窗口大小
-    viewport.Height = static_cast<float>(1080);
+    viewport.Width = static_cast<float>(1080);   // 窗口宽度
+    viewport.Height = static_cast<float>(1920);  // 窗口高度
     viewport.MinDepth = 0.0f;
     viewport.MaxDepth = 1.0f;
+    viewport.TopLeftX = 0.0f;
+    viewport.TopLeftY = 0.0f;
     m_context->RSSetViewports(1, &viewport);
     
     // 设置输入布局
@@ -456,8 +529,79 @@ bool D3D11Renderer::ConvertFrame(const uint8_t* nv12Data, int width, int height,
 }
 
 void D3D11Renderer::RenderToScreen(const uint8_t* nv12Data, int width, int height) {
-    // 这个方法需要与SDL2集成来渲染到屏幕
-    // 目前只实现离屏转换
-    std::vector<uint8_t> rgbaData(width * height * 4);
-    ConvertFrame(nv12Data, width, height, rgbaData.data());
+    if (!nv12Data || !m_context || !m_renderTargetView) {
+        static int errorCount = 0;
+        if (errorCount < 3) {
+            std::cout << "D3D11 RenderToScreen error: nv12Data=" << (nv12Data ? "valid" : "null") 
+                      << ", context=" << (m_context ? "valid" : "null")
+                      << ", renderTargetView=" << (m_renderTargetView ? "valid" : "null") << std::endl;
+            errorCount++;
+        }
+        return;
+    }
+    
+    static int renderCallCount = 0;
+    renderCallCount++;
+    if (renderCallCount <= 3) {
+        std::cout << "D3D11 RenderToScreen " << renderCallCount << ": " << width << "x" << height << std::endl;
+    }
+    
+    // 创建或更新纹理
+    if (!CreateTextures(width, height)) {
+        if (renderCallCount <= 3) {
+            std::cout << "D3D11 CreateTextures failed" << std::endl;
+        }
+        return;
+    }
+    
+    // 更新Y纹理数据
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+    HRESULT hr = m_context->Map(m_yTexture.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+    if (SUCCEEDED(hr)) {
+        const uint8_t* srcY = nv12Data;
+        uint8_t* dstY = static_cast<uint8_t*>(mappedResource.pData);
+        for (int y = 0; y < height; ++y) {
+            memcpy(dstY + y * mappedResource.RowPitch, srcY + y * width, width);
+        }
+        m_context->Unmap(m_yTexture.Get(), 0);
+    }
+    
+    // 更新UV纹理数据
+    hr = m_context->Map(m_uvTexture.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+    if (SUCCEEDED(hr)) {
+        const uint8_t* srcUV = nv12Data + width * height;
+        uint8_t* dstUV = static_cast<uint8_t*>(mappedResource.pData);
+        int uvWidth = width / 2;
+        int uvHeight = height / 2;
+        for (int y = 0; y < uvHeight; ++y) {
+            memcpy(dstUV + y * mappedResource.RowPitch, srcUV + y * width, width);
+        }
+        m_context->Unmap(m_uvTexture.Get(), 0);
+    }
+    
+    // 清除渲染目标
+    float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    m_context->ClearRenderTargetView(m_renderTargetView.Get(), clearColor);
+    
+    // 设置渲染目标
+    m_context->OMSetRenderTargets(1, m_renderTargetView.GetAddressOf(), nullptr);
+    
+    // 设置渲染状态
+    SetupRenderState();
+    
+    // 绑定纹理到shader
+    ID3D11ShaderResourceView* srvs[] = { m_ySRV.Get(), m_uvSRV.Get() };
+    m_context->PSSetShaderResources(0, 2, srvs);
+    
+    // 渲染
+    m_context->DrawIndexed(6, 0, 0);
+    
+    // 呈现到屏幕
+    if (m_swapChain) {
+        m_swapChain->Present(1, 0);  // VSync enabled
+    }
+    
+    if (renderCallCount <= 3) {
+        std::cout << "D3D11 RenderToScreen completed successfully" << std::endl;
+    }
 }
