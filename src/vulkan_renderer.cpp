@@ -1,4 +1,6 @@
 #include "vulkan_renderer.h"
+
+#ifdef VULKAN_AVAILABLE
 #include <iostream>
 #include <vector>
 #include <set>
@@ -1513,3 +1515,5 @@ void VulkanRenderer::EndSingleTimeCommands(VkCommandBuffer commandBuffer) {
     
     vkFreeCommandBuffers(m_device, m_commandPool, 1, &commandBuffer);
 }
+
+#endif // VULKAN_AVAILABLE

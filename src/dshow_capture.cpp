@@ -1,12 +1,9 @@
 #include "dshow_capture.h"
 #include "dshow_device_enum.h"
 #include <iostream>
-#include <iomanip>
+#include <mfreadwrite.h>
 
-// GUID定义
-DEFINE_GUID(CLSID_SampleGrabber, 0xc1f400a0, 0x3f08, 0x11d3, 0x9f, 0x0b, 0x00, 0x60, 0x08, 0x03, 0x9e, 0x37);
-DEFINE_GUID(IID_ISampleGrabber, 0x6b652fff, 0x11fe, 0x4fce, 0x92, 0xad, 0x02, 0x66, 0xb5, 0xd7, 0xc7, 0x8f);
-DEFINE_GUID(CLSID_NullRenderer, 0xc1f400a4, 0x3f08, 0x11d3, 0x9f, 0x0b, 0x00, 0x60, 0x08, 0x03, 0x9e, 0x37);
+// GUID定义已在qedit.h中包含
 
 DirectShowCapture::DirectShowCapture() 
     : m_initialized(false), m_capturing(false), m_grabberCallback(nullptr) {
@@ -453,7 +450,15 @@ STDMETHODIMP SampleGrabberCallback::SampleCB(double sampleTime, IMediaSample* sa
         return E_POINTER;
     }
     
-    // 获取样本数据
+    // 首先尝试作为D3D11纹理处理
+    if (TryProcessAsDirect3D11(sample, sampleTime)) {
+        if (sampleCallCount <= 3) {
+            std::cout << "SampleCB: Successfully processed as D3D11 texture (zero-copy)" << std::endl;
+        }
+        return S_OK;
+    }
+    
+    // 如果不是D3D11纹理，回退到传统的CPU内存处理
     BYTE* pBuffer = NULL;
     HRESULT hr = sample->GetPointer(&pBuffer);
     if (FAILED(hr) || !pBuffer) {
@@ -466,7 +471,7 @@ STDMETHODIMP SampleGrabberCallback::SampleCB(double sampleTime, IMediaSample* sa
     // 获取样本大小
     long lDataLen = sample->GetActualDataLength();
     if (sampleCallCount <= 3) {
-        std::cout << "SampleCB: Got sample with " << lDataLen << " bytes" << std::endl;
+        std::cout << "SampleCB: Using CPU memory fallback with " << lDataLen << " bytes" << std::endl;
     }
     
     // 调用BufferCB来处理数据（重用现有逻辑）
@@ -489,4 +494,60 @@ STDMETHODIMP SampleGrabberCallback::BufferCB(double sampleTime, BYTE* buffer, lo
         }
     }
     return S_OK;
+}
+
+bool SampleGrabberCallback::TryProcessAsDirect3D11(IMediaSample* sample, double timestamp) {
+    // 尝试获取 IMFGetService 接口
+    ComPtr<IMFGetService> mfGetService;
+    HRESULT hr = sample->QueryInterface(IID_PPV_ARGS(&mfGetService));
+    if (FAILED(hr)) return false;
+    
+    // 获取 DXGI 设备管理器
+    ComPtr<IMFDXGIDeviceManager> dxgiManager;
+    hr = mfGetService->GetService(MF_SOURCE_READER_D3D_MANAGER,
+                                  IID_PPV_ARGS(&dxgiManager));
+    if (FAILED(hr)) return false;
+    
+    // 获取 D3D11 设备
+    HANDLE deviceHandle;
+    hr = dxgiManager->OpenDeviceHandle(&deviceHandle);
+    if (FAILED(hr)) return false;
+    
+    ComPtr<ID3D11Device> device;
+    hr = dxgiManager->GetVideoService(deviceHandle, IID_PPV_ARGS(&device));
+    if (SUCCEEDED(hr)) {
+        // 获取纹理缓冲区
+        ComPtr<IMFMediaBuffer> mediaBuffer;
+        hr = sample->QueryInterface(IID_PPV_ARGS(&mediaBuffer));
+        if (SUCCEEDED(hr)) {
+            ComPtr<IMFDXGIBuffer> dxgiBuffer;
+            hr = mediaBuffer->QueryInterface(IID_PPV_ARGS(&dxgiBuffer));
+            if (SUCCEEDED(hr)) {
+                ComPtr<ID3D11Texture2D> texture;
+                UINT subresource;
+                hr = dxgiBuffer->GetResource(IID_PPV_ARGS(&texture));
+                if (SUCCEEDED(hr)) {
+                    dxgiBuffer->GetSubresourceIndex(&subresource);
+                    
+                    // 直接在GPU上处理，零拷贝！
+                    // 这里需要实现GPU处理逻辑
+                    // gpu_processor_->ProcessTextureGPU(texture.Get(), timestamp);
+                    
+                    // 临时：输出成功信息
+                    static int textureCount = 0;
+                    textureCount++;
+                    if (textureCount <= 5) {
+                        std::cout << "Successfully got D3D11 texture " << textureCount 
+                                  << " at timestamp " << timestamp << std::endl;
+                    }
+                    
+                    dxgiManager->CloseDeviceHandle(deviceHandle);
+                    return true;
+                }
+            }
+        }
+    }
+    
+    dxgiManager->CloseDeviceHandle(deviceHandle);
+    return false;
 }

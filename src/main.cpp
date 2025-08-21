@@ -7,9 +7,13 @@
 #include <cctype>
 #include <cstring>
 #include <mutex>
+#include <wrl/client.h>
+
+using Microsoft::WRL::ComPtr;
 
 #include "camera_capture.h"
 #include "dshow_capture.h"
+#include "wmf_capture.h"
 #include "renderer_interface.h"
 #include "nv12_to_rgba_shader.h"  // 为了使用InitializeOpenGLExtensions函数
 #include "d3d11_renderer.h"
@@ -21,6 +25,7 @@ private:
     SDL_GLContext m_glContext;
     CameraCapture m_capture;
     DirectShowCapture m_dshowCapture;
+    WMFCapture m_wmfCapture;
     IRenderer* m_renderer;
     bool m_running;
     
@@ -52,7 +57,11 @@ public:
         }
         
         // 选择渲染器类型（可以通过命令行参数或配置文件选择）
-        RendererType rendererType = RendererType::Vulkan;  // 默认使用Direct3D11
+#ifdef VULKAN_AVAILABLE
+        RendererType rendererType = RendererType::Vulkan;  // 如果有Vulkan SDK，使用Vulkan
+#else
+        RendererType rendererType = RendererType::Direct3D11;  // 否则使用Direct3D11
+#endif
         
         // 根据渲染器类型创建窗口
         if (rendererType == RendererType::OpenGL) {
@@ -171,13 +180,30 @@ public:
             return false;
         }
         
+        // 初始化WMF捕获
+        if (!m_wmfCapture.Initialize()) {
+            std::cerr << "Failed to initialize WMF capture" << std::endl;
+            return false;
+        }
+        
         return true;
     }
     
     void Run() {
+        // 枚举WMF设备
+        auto wmfDevices = m_wmfCapture.EnumerateDevices();
+        std::wcout << L"Available devices (Windows Media Foundation):" << std::endl;
+        for (size_t i = 0; i < wmfDevices.size(); i++) {
+            std::wcout << i << L": " << wmfDevices[i].friendlyName;
+            if (wmfDevices[i].isHardwareAccelerated) {
+                std::wcout << L" [Hardware Accelerated]";
+            }
+            std::wcout << std::endl;
+        }
+        
         // 使用DirectShow枚举设备
         auto dshowDevices = m_capture.GetDirectShowDevices();
-        std::cout << "Available devices (DirectShow):" << std::endl;
+        std::cout << "\nAvailable devices (DirectShow):" << std::endl;
         for (size_t i = 0; i < dshowDevices.size(); i++) {
             std::cout << i << ": " << dshowDevices[i].friendlyName;
             if (dshowDevices[i].isOBSVirtualCamera) {
@@ -186,11 +212,98 @@ public:
             std::cout << std::endl;
         }
         
+        // 让用户选择采集方式
+        std::cout << "\nSelect capture method:" << std::endl;
+        std::cout << "1: Windows Media Foundation (WMF) - Modern, GPU accelerated" << std::endl;
+        std::cout << "2: DirectShow - Legacy, compatible" << std::endl;
+        std::cout << "Enter choice (1-2, default: 1): ";
+        
+        std::string methodChoice;
+        std::getline(std::cin, methodChoice);
+        
+        bool useWMF = (methodChoice.empty() || methodChoice[0] == '1');
+        
+        if (useWMF && !wmfDevices.empty()) {
+            RunWithWMF(wmfDevices);
+        } else if (!dshowDevices.empty()) {
+            if (useWMF && wmfDevices.empty()) {
+                std::cout << "No WMF devices found, falling back to DirectShow..." << std::endl;
+            }
+            RunWithDirectShow(dshowDevices);
+        } else {
+            std::cerr << "No camera devices found!" << std::endl;
+            return;
+        }
+    }
+
+private:
+    void RunWithWMF(const std::vector<WMFDevice>& wmfDevices) {
+        std::wcout << L"\nUsing Windows Media Foundation" << std::endl;
+        
+        // 选择设备
+        std::wstring selectedDevice;
+        
+        if (wmfDevices.size() == 1) {
+            selectedDevice = wmfDevices[0].symbolicLink;
+            std::wcout << L"Using device: " << wmfDevices[0].friendlyName << std::endl;
+        } else {
+            std::wcout << L"Please select a WMF device:" << std::endl;
+            for (size_t i = 0; i < wmfDevices.size(); i++) {
+                std::wcout << i << L": " << wmfDevices[i].friendlyName;
+                if (wmfDevices[i].isHardwareAccelerated) {
+                    std::wcout << L" [Hardware Accelerated]";
+                }
+                std::wcout << std::endl;
+            }
+            
+            std::cout << "Enter device number (0-" << (wmfDevices.size()-1) << "): ";
+            std::string input;
+            std::getline(std::cin, input);
+            
+            size_t deviceIndex = 0;
+            if (!input.empty()) {
+                try {
+                    deviceIndex = std::stoul(input);
+                    if (deviceIndex >= wmfDevices.size()) {
+                        std::cout << "Invalid device number, using device 0." << std::endl;
+                        deviceIndex = 0;
+                    }
+                } catch (const std::exception&) {
+                    std::cout << "Invalid input, using device 0." << std::endl;
+                    deviceIndex = 0;
+                }
+            }
+            
+            selectedDevice = wmfDevices[deviceIndex].symbolicLink;
+        }
+        
+        std::wcout << L"Starting WMF capture..." << std::endl;
+        
+        bool captureStarted = m_wmfCapture.StartCapture(selectedDevice,
+            [this](const WMFFrameData& frame) {
+                this->OnWMFFrameReceived(frame);
+            });
+            
+        if (!captureStarted) {
+            std::wcerr << L"Failed to start WMF capture" << std::endl;
+            return;
+        }
+        
+        std::wcout << L"WMF capture started successfully!" << std::endl;
+        std::wcout << L"Press ESC to exit, or close the window." << std::endl;
+        
+        RunMainLoop();
+        m_wmfCapture.StopCapture();
+    }
+    
+    void RunWithDirectShow(const std::vector<DirectShowDevice>& dshowDevices) {
+        std::cout << "\nUsing DirectShow" << std::endl;
+        
         // 让用户选择摄像头设备
         std::string selectedDevice;
         
         if (dshowDevices.empty()) {
-            std::cerr << "No camera devices found!" << std::endl;
+            std::cerr << "No DirectShow devices found!" << std::endl;
             return;
         }
         
@@ -241,7 +354,7 @@ public:
         }
         
         std::cout << "Selected device: " << selectedDevice << std::endl;
-        std::cout << "Starting capture..." << std::endl;
+        std::cout << "Starting DirectShow capture..." << std::endl;
         
         bool captureStarted = false;
         
@@ -257,7 +370,7 @@ public:
         
         // 如果DirectShow失败或不是OBS设备，尝试Media Foundation
         if (!captureStarted) {
-            std::cout << "Using Media Foundation..." << std::endl;
+            std::cout << "Using Media Foundation fallback..." << std::endl;
             captureStarted = m_capture.StartCapture(selectedDevice,
                 [this](const CameraCapture::FrameData& frame) {
                     this->OnFrameReceived(frame);
@@ -266,14 +379,17 @@ public:
             
         if (!captureStarted) {
             std::cerr << "Failed to start capture for device: " << selectedDevice << std::endl;
-            std::cerr << "This might be because:" << std::endl;
-            std::cerr << "1. The device is already in use by another application" << std::endl;
-            std::cerr << "2. The device doesn't support the required format" << std::endl;
-            std::cerr << "3. Access permissions issue" << std::endl;
             return;
         }
         
-        std::cout << "Capture started successfully!" << std::endl;
+        std::cout << "DirectShow capture started successfully!" << std::endl;
+        RunMainLoop();
+        
+        m_capture.StopCapture();
+        m_dshowCapture.StopCapture();
+    }
+    
+    void RunMainLoop() {
         std::cout << "Press ESC to exit, or close the window." << std::endl;
         std::cout << "Starting main loop..." << std::endl;
         
@@ -308,9 +424,111 @@ public:
         }
         
         std::cout << "Main loop exited after " << loopCount << " iterations" << std::endl;
+    }
+    
+    void OnWMFFrameReceived(const WMFFrameData& frame) {
+        // WMF帧接收回调
+        std::lock_guard<std::mutex> lock(m_frameMutex);
         
-        m_capture.StopCapture();
-        m_dshowCapture.StopCapture();
+        if (frame.isGPUTexture && frame.texture) {
+            // GPU纹理处理 - 零拷贝！
+            static int textureFrameCount = 0;
+            textureFrameCount++;
+            if (textureFrameCount <= 3) {
+                std::cout << "WMF GPU Texture Frame " << textureFrameCount << ": " 
+                         << frame.width << "x" << frame.height 
+                         << ", Format: " << frame.format << std::endl;
+            }
+            
+            // 这里可以直接使用GPU纹理进行渲染
+            // TODO: 实现GPU纹理到渲染器的直接传递
+            
+            // 临时：将GPU纹理复制到CPU内存作为后备
+            if (CopyTextureToBuffer(frame.texture.Get(), frame.width, frame.height)) {
+                m_frameWidth = frame.width;
+                m_frameHeight = frame.height;
+                m_hasNewFrame = true;
+            }
+        } else if (!frame.cpuData.empty()) {
+            // CPU数据处理
+            m_latestFrame = frame.cpuData;
+            m_frameWidth = frame.width;
+            m_frameHeight = frame.height;
+            m_hasNewFrame = true;
+            
+            static int cpuFrameCount = 0;
+            cpuFrameCount++;
+            if (cpuFrameCount <= 3) {
+                std::cout << "WMF CPU Frame " << cpuFrameCount << ": " 
+                         << frame.width << "x" << frame.height 
+                         << ", size: " << frame.cpuData.size() << " bytes" << std::endl;
+            }
+        }
+    }
+    
+    bool CopyTextureToBuffer(ID3D11Texture2D* texture, int width, int height) {
+        // 临时实现：将GPU纹理复制到CPU缓冲区
+        // 在实际应用中，应该直接使用GPU纹理进行渲染以获得最佳性能
+        
+        if (!texture || !m_wmfCapture.GetD3D11Device()) {
+            return false;
+        }
+        
+        ComPtr<ID3D11Device> device = m_wmfCapture.GetD3D11Device();
+        ComPtr<ID3D11DeviceContext> context;
+        device->GetImmediateContext(&context);
+        
+        // 创建暂存纹理用于CPU读取
+        D3D11_TEXTURE2D_DESC desc;
+        texture->GetDesc(&desc);
+        desc.Usage = D3D11_USAGE_STAGING;
+        desc.BindFlags = 0;
+        desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        
+        ComPtr<ID3D11Texture2D> stagingTexture;
+        HRESULT hr = device->CreateTexture2D(&desc, nullptr, &stagingTexture);
+        if (FAILED(hr)) {
+            return false;
+        }
+        
+        // 复制纹理到暂存纹理
+        context->CopyResource(stagingTexture.Get(), texture);
+        
+        // 映射暂存纹理并读取数据
+        D3D11_MAPPED_SUBRESOURCE mappedResource;
+        hr = context->Map(stagingTexture.Get(), 0, D3D11_MAP_READ, 0, &mappedResource);
+        if (FAILED(hr)) {
+            return false;
+        }
+        
+        // 计算所需缓冲区大小（假设为NV12格式）
+        size_t bufferSize = width * height * 3 / 2;
+        m_latestFrame.resize(bufferSize);
+        
+        // 复制Y平面
+        const uint8_t* srcY = static_cast<const uint8_t*>(mappedResource.pData);
+        uint8_t* dstY = m_latestFrame.data();
+        for (int y = 0; y < height; ++y) {
+            memcpy(dstY + y * width, srcY + y * mappedResource.RowPitch, width);
+        }
+        
+        // 复制UV平面（假设NV12格式）
+        const uint8_t* srcUV = srcY + mappedResource.RowPitch * height;
+        uint8_t* dstUV = dstY + width * height;
+        for (int y = 0; y < height / 2; ++y) {
+            memcpy(dstUV + y * width, srcUV + y * mappedResource.RowPitch, width);
+        }
+        
+        context->Unmap(stagingTexture.Get(), 0);
+        
+        static int copyCount = 0;
+        copyCount++;
+        if (copyCount <= 3) {
+            std::cout << "Copied GPU texture to CPU buffer " << copyCount 
+                      << " (Note: This reduces performance - direct GPU rendering would be better)" << std::endl;
+        }
+        
+        return true;
     }
     
 private:

@@ -26,8 +26,8 @@ find_library(SDL2MAIN_LIBRARY SDL2main PATHS ${SDL2_LIB_DIR} NO_DEFAULT_PATH)
 # OpenGL
 find_package(OpenGL REQUIRED)
 
-# Vulkan
-find_package(Vulkan REQUIRED)
+# Vulkan (可选)
+find_package(Vulkan QUIET)
 
 # Windows Media Foundation、DirectShow 和 Direct3D 库
 set(WINDOWS_LIBS
@@ -49,9 +49,14 @@ set(WINDOWS_LIBS
 include_directories(
     ${SDL2_INCLUDE_DIR}
     ${OPENGL_INCLUDE_DIRS}
-    ${Vulkan_INCLUDE_DIRS}
     src/
 )
+
+# 如果找到Vulkan，添加其包含目录
+if(Vulkan_FOUND)
+    include_directories(${Vulkan_INCLUDE_DIRS})
+    add_definitions(-DVULKAN_AVAILABLE)
+endif()
 
 # 源文件
 set(SOURCES
@@ -63,6 +68,7 @@ set(SOURCES
     src/renderer_factory.cpp
     src/dshow_device_enum.cpp
     src/dshow_capture.cpp
+    src/wmf_capture.cpp
 )
 
 # 创建可执行文件
@@ -73,9 +79,13 @@ target_link_libraries(${PROJECT_NAME}
     ${SDL2_LIBRARY}
     ${SDL2MAIN_LIBRARY}
     ${OPENGL_LIBRARIES}
-    ${Vulkan_LIBRARIES}
     ${WINDOWS_LIBS}
 )
+
+# 如果找到Vulkan，链接Vulkan库
+if(Vulkan_FOUND)
+    target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARIES})
+endif()
 
 # 复制SDL2 DLL到输出目录（Windows平台）
 if(WIN32)

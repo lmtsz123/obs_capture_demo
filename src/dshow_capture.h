@@ -10,10 +10,21 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <mfapi.h>
+#include <mfidl.h>
+#include <mfreadwrite.h>
+#include <d3d11.h>
+#include <wrl/client.h>
+
+using Microsoft::WRL::ComPtr;
 
 #pragma comment(lib, "strmiids.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "oleaut32.lib")
+#pragma comment(lib, "mf.lib")
+#pragma comment(lib, "mfplat.lib")
+#pragma comment(lib, "mfreadwrite.lib")
+#pragma comment(lib, "d3d11.lib")
 
 // 前向声明
 class SampleGrabberCallback;
@@ -88,4 +99,7 @@ public:
 private:
     DirectShowCapture* m_parent;
     LONG m_refCount;
+    
+    // D3D11纹理处理方法
+    bool TryProcessAsDirect3D11(IMediaSample* sample, double timestamp);
 };

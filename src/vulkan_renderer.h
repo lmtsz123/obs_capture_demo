@@ -2,13 +2,16 @@
 
 #include "renderer_interface.h"
 
+#ifdef VULKAN_AVAILABLE
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan/vulkan.h>
+#endif
 
 #include <vector>
 #include <memory>
 #include <string>
 
+#ifdef VULKAN_AVAILABLE
 class VulkanRenderer : public IRenderer {
 public:
     VulkanRenderer();
@@ -132,3 +135,22 @@ private:
     // 清理方法
     void CleanupSwapChain();
 };
+#else
+// Vulkan不可用时的占位符类
+class VulkanRenderer : public IRenderer {
+public:
+    VulkanRenderer() = default;
+    ~VulkanRenderer() override = default;
+    
+    bool Initialize() override { return false; }
+    bool Initialize(void* windowHandle) { return false; }
+    void Cleanup() override {}
+    
+    bool ConvertFrame(const uint8_t* nv12Data, int width, int height, 
+                     uint8_t* rgbaOutput) override { return false; }
+    
+    void RenderToScreen(const uint8_t* nv12Data, int width, int height) override {}
+    
+    RendererType GetType() const override { return RendererType::Vulkan; }
+};
+#endif
