@@ -13,6 +13,7 @@
 #include "renderer_interface.h"
 #include "nv12_to_rgba_shader.h"  // 为了使用InitializeOpenGLExtensions函数
 #include "d3d11_renderer.h"
+#include "vulkan_renderer.h"
 
 class Application {
 private:
@@ -51,7 +52,7 @@ public:
         }
         
         // 选择渲染器类型（可以通过命令行参数或配置文件选择）
-        RendererType rendererType = RendererType::Direct3D11;  // 默认使用Direct3D11
+        RendererType rendererType = RendererType::Vulkan;  // 默认使用Direct3D11
         
         // 根据渲染器类型创建窗口
         if (rendererType == RendererType::OpenGL) {
@@ -128,6 +129,17 @@ public:
             } else {
                 std::cerr << "Failed to get window handle for D3D11" << std::endl;
             }
+        } else if (rendererType == RendererType::Vulkan) {
+            // Vulkan渲染器需要窗口句柄
+            SDL_SysWMinfo wmInfo;
+            SDL_VERSION(&wmInfo.version);
+            if (SDL_GetWindowWMInfo(m_window, &wmInfo)) {
+                HWND hwnd = wmInfo.info.win.window;
+                VulkanRenderer* vulkanRenderer = static_cast<VulkanRenderer*>(m_renderer);
+                rendererInitialized = vulkanRenderer->Initialize(hwnd);
+            } else {
+                std::cerr << "Failed to get window handle for Vulkan" << std::endl;
+            }
         } else {
             // OpenGL渲染器使用默认初始化
             rendererInitialized = m_renderer->Initialize();
@@ -138,7 +150,14 @@ public:
             return false;
         }
         
-        std::cout << "Using renderer: " << (rendererType == RendererType::OpenGL ? "OpenGL" : "Direct3D11") << std::endl;
+        std::string rendererName;
+        switch (rendererType) {
+            case RendererType::OpenGL: rendererName = "OpenGL"; break;
+            case RendererType::Direct3D11: rendererName = "Direct3D11"; break;
+            case RendererType::Vulkan: rendererName = "Vulkan"; break;
+            default: rendererName = "Unknown"; break;
+        }
+        std::cout << "Using renderer: " << rendererName << std::endl;
         
         // 初始化摄像头捕获
         if (!m_capture.Initialize()) {

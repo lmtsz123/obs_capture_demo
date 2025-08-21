@@ -4,7 +4,8 @@
 
 enum class RendererType {
     OpenGL,
-    Direct3D11
+    Direct3D11,
+    Vulkan
 };
 
 // 抽象渲染器接口

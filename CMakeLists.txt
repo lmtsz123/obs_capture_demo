@@ -26,6 +26,9 @@ find_library(SDL2MAIN_LIBRARY SDL2main PATHS ${SDL2_LIB_DIR} NO_DEFAULT_PATH)
 # OpenGL
 find_package(OpenGL REQUIRED)
 
+# Vulkan
+find_package(Vulkan REQUIRED)
+
 # Windows Media Foundation、DirectShow 和 Direct3D 库
 set(WINDOWS_LIBS
     mf
@@ -46,6 +49,7 @@ set(WINDOWS_LIBS
 include_directories(
     ${SDL2_INCLUDE_DIR}
     ${OPENGL_INCLUDE_DIRS}
+    ${Vulkan_INCLUDE_DIRS}
     src/
 )
 
@@ -55,6 +59,7 @@ set(SOURCES
     src/camera_capture.cpp
     src/nv12_to_rgba_shader.cpp
     src/d3d11_renderer.cpp
+    src/vulkan_renderer.cpp
     src/renderer_factory.cpp
     src/dshow_device_enum.cpp
     src/dshow_capture.cpp
@@ -68,6 +73,7 @@ target_link_libraries(${PROJECT_NAME}
     ${SDL2_LIBRARY}
     ${SDL2MAIN_LIBRARY}
     ${OPENGL_LIBRARIES}
+    ${Vulkan_LIBRARIES}
     ${WINDOWS_LIBS}
 )
 
@@ -77,4 +83,46 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${SDL2_LIB_DIR}/SDL2.dll"
         $<TARGET_FILE_DIR:${PROJECT_NAME}>)
+endif()
+
+# 编译Vulkan着色器
+find_program(GLSLC glslc HINTS ${Vulkan_GLSLC_EXECUTABLE} PATHS ENV VULKAN_SDK PATH_SUFFIXES bin)
+
+if(GLSLC)
+    set(SHADER_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+    set(SHADER_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
+    
+    file(MAKE_DIRECTORY ${SHADER_BINARY_DIR})
+    
+    # 编译顶点着色器
+    add_custom_command(
+        OUTPUT ${SHADER_BINARY_DIR}/vulkan_vertex_shader.spv
+        COMMAND ${GLSLC} ${SHADER_SOURCE_DIR}/vulkan_vertex_shader.vert -o ${SHADER_BINARY_DIR}/vulkan_vertex_shader.spv
+        DEPENDS ${SHADER_SOURCE_DIR}/vulkan_vertex_shader.vert
+        COMMENT "Compiling Vulkan vertex shader"
+    )
+    
+    # 编译片段着色器
+    add_custom_command(
+        OUTPUT ${SHADER_BINARY_DIR}/vulkan_fragment_shader.spv
+        COMMAND ${GLSLC} ${SHADER_SOURCE_DIR}/vulkan_fragment_shader.frag -o ${SHADER_BINARY_DIR}/vulkan_fragment_shader.spv
+        DEPENDS ${SHADER_SOURCE_DIR}/vulkan_fragment_shader.frag
+        COMMENT "Compiling Vulkan fragment shader"
+    )
+    
+    # 创建着色器目标
+    add_custom_target(vulkan_shaders
+        DEPENDS ${SHADER_BINARY_DIR}/vulkan_vertex_shader.spv ${SHADER_BINARY_DIR}/vulkan_fragment_shader.spv
+    )
+    
+    # 让主目标依赖着色器编译
+    add_dependencies(${PROJECT_NAME} vulkan_shaders)
+    
+    # 复制编译好的着色器到输出目录
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${SHADER_BINARY_DIR}
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders)
+else()
+    message(WARNING "glslc not found. Vulkan shaders will not be compiled.")
 endif()
