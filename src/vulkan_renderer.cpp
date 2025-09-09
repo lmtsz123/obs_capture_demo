@@ -149,19 +149,135 @@ void VulkanRenderer::Cleanup() {
     if (m_device != VK_NULL_HANDLE) {
         vkDeviceWaitIdle(m_device);
         
+        // 清理同步对象
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            if (m_imageAvailableSemaphores[i] != VK_NULL_HANDLE) {
+                vkDestroySemaphore(m_device, m_imageAvailableSemaphores[i], nullptr);
+                m_imageAvailableSemaphores[i] = VK_NULL_HANDLE;
+            }
+            if (m_renderFinishedSemaphores[i] != VK_NULL_HANDLE) {
+                vkDestroySemaphore(m_device, m_renderFinishedSemaphores[i], nullptr);
+                m_renderFinishedSemaphores[i] = VK_NULL_HANDLE;
+            }
+            if (m_inFlightFences[i] != VK_NULL_HANDLE) {
+                vkDestroyFence(m_device, m_inFlightFences[i], nullptr);
+                m_inFlightFences[i] = VK_NULL_HANDLE;
+            }
+        }
+        
+        // 清理命令缓冲区和命令池
+        if (m_commandPool != VK_NULL_HANDLE) {
+            vkDestroyCommandPool(m_device, m_commandPool, nullptr);
+            m_commandPool = VK_NULL_HANDLE;
+        }
+        
+        // 清理帧缓冲区
+        for (auto framebuffer : m_swapChainFramebuffers) {
+            if (framebuffer != VK_NULL_HANDLE) {
+                vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+            }
+        }
+        m_swapChainFramebuffers.clear();
+        
+        // 清理管线和布局
+        if (m_graphicsPipeline != VK_NULL_HANDLE) {
+            vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
+            m_graphicsPipeline = VK_NULL_HANDLE;
+        }
+        if (m_pipelineLayout != VK_NULL_HANDLE) {
+            vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
+            m_pipelineLayout = VK_NULL_HANDLE;
+        }
+        if (m_renderPass != VK_NULL_HANDLE) {
+            vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+            m_renderPass = VK_NULL_HANDLE;
+        }
+        
+        // 清理描述符
+        if (m_descriptorPool != VK_NULL_HANDLE) {
+            vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
+            m_descriptorPool = VK_NULL_HANDLE;
+        }
+        if (m_descriptorSetLayout != VK_NULL_HANDLE) {
+            vkDestroyDescriptorSetLayout(m_device, m_descriptorSetLayout, nullptr);
+            m_descriptorSetLayout = VK_NULL_HANDLE;
+        }
+        
+        // 清理纹理和采样器
+        if (m_yTextureSampler != VK_NULL_HANDLE) {
+            vkDestroySampler(m_device, m_yTextureSampler, nullptr);
+            m_yTextureSampler = VK_NULL_HANDLE;
+        }
+        if (m_uvTextureSampler != VK_NULL_HANDLE) {
+            vkDestroySampler(m_device, m_uvTextureSampler, nullptr);
+            m_uvTextureSampler = VK_NULL_HANDLE;
+        }
+        
+        // 清理图像视图
+        if (m_yTextureView != VK_NULL_HANDLE) {
+            vkDestroyImageView(m_device, m_yTextureView, nullptr);
+            m_yTextureView = VK_NULL_HANDLE;
+        }
+        if (m_uvTextureView != VK_NULL_HANDLE) {
+            vkDestroyImageView(m_device, m_uvTextureView, nullptr);
+            m_uvTextureView = VK_NULL_HANDLE;
+        }
+        
+        // 清理图像
+        if (m_yTexture != VK_NULL_HANDLE) {
+            vkDestroyImage(m_device, m_yTexture, nullptr);
+            m_yTexture = VK_NULL_HANDLE;
+        }
+        if (m_uvTexture != VK_NULL_HANDLE) {
+            vkDestroyImage(m_device, m_uvTexture, nullptr);
+            m_uvTexture = VK_NULL_HANDLE;
+        }
+        
+        // 清理设备内存
+        if (m_yTextureMemory != VK_NULL_HANDLE) {
+            vkFreeMemory(m_device, m_yTextureMemory, nullptr);
+            m_yTextureMemory = VK_NULL_HANDLE;
+        }
+        if (m_uvTextureMemory != VK_NULL_HANDLE) {
+            vkFreeMemory(m_device, m_uvTextureMemory, nullptr);
+            m_uvTextureMemory = VK_NULL_HANDLE;
+        }
+        
+        // 清理缓冲区
+        if (m_indexBuffer != VK_NULL_HANDLE) {
+            vkDestroyBuffer(m_device, m_indexBuffer, nullptr);
+            m_indexBuffer = VK_NULL_HANDLE;
+        }
+        if (m_indexBufferMemory != VK_NULL_HANDLE) {
+            vkFreeMemory(m_device, m_indexBufferMemory, nullptr);
+            m_indexBufferMemory = VK_NULL_HANDLE;
+        }
+        if (m_vertexBuffer != VK_NULL_HANDLE) {
+            vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
+            m_vertexBuffer = VK_NULL_HANDLE;
+        }
+        if (m_vertexBufferMemory != VK_NULL_HANDLE) {
+            vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
+            m_vertexBufferMemory = VK_NULL_HANDLE;
+        }
+        
+        // 清理交换链
         CleanupSwapChain();
         
+        // 清理设备
         if (m_device != VK_NULL_HANDLE) {
             vkDestroyDevice(m_device, nullptr);
             m_device = VK_NULL_HANDLE;
         }
     }
     
+    // 清理表面
     if (m_surface != VK_NULL_HANDLE) {
         vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
         m_surface = VK_NULL_HANDLE;
     }
     
+    // 清理实例
     if (m_instance != VK_NULL_HANDLE) {
         vkDestroyInstance(m_instance, nullptr);
         m_instance = VK_NULL_HANDLE;

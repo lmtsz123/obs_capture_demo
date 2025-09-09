@@ -27,24 +27,62 @@ bool DirectShowCapture::Initialize() {
 }
 
 void DirectShowCapture::Cleanup() {
-    StopCapture();
+    std::cout << "DirectShow cleanup started..." << std::endl;
     
+    // 停止捕获
+    if (m_capturing) {
+        m_capturing = false;
+        std::cout << "Stopping DirectShow capture..." << std::endl;
+        
+        // 等待一下让所有回调完成
+        Sleep(100);
+    }
+    
+    // 清理回调对象
     if (m_grabberCallback) {
+        std::cout << "Deleting grabber callback..." << std::endl;
         delete m_grabberCallback;
         m_grabberCallback = nullptr;
     }
     
-    m_nullRenderer.Release();
-    m_sampleGrabber.Release();
-    m_sourceFilter.Release();
-    m_mediaControl.Release();
-    m_captureBuilder.Release();
-    m_graphBuilder.Release();
+    // 简化的DirectShow清理 - 避免复杂的COM清理导致崩溃
+    try {
+        std::cout << "Cleaning up DirectShow COM objects..." << std::endl;
+        
+        // 只停止媒体控制，让操作系统在进程退出时清理COM对象
+        if (m_mediaControl) {
+            std::cout << "Stopping media control..." << std::endl;
+            HRESULT hr = m_mediaControl->Stop();
+            if (FAILED(hr)) {
+                std::cerr << "Warning: Failed to stop media control. HRESULT: " << std::hex << hr << std::endl;
+            }
+            Sleep(50);
+        }
+        
+        // 安全的方式：将指针置空但不调用Release
+        // 让CComPtr析构函数在安全的时机处理
+        std::cout << "Clearing COM pointers..." << std::endl;
+        m_mediaControl.Detach();
+        m_nullRenderer.Detach();
+        m_sampleGrabber.Detach();
+        m_sourceFilter.Detach();
+        m_captureBuilder.Detach();
+        m_graphBuilder.Detach();
+        
+        std::cout << "DirectShow cleanup completed" << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Exception during DirectShow cleanup: " << e.what() << std::endl;
+    } catch (...) {
+        std::cerr << "Unknown exception during DirectShow cleanup" << std::endl;
+    }
     
     if (m_initialized) {
+        std::cout << "Uninitializing COM..." << std::endl;
         CoUninitialize();
         m_initialized = false;
     }
+    
+    std::cout << "DirectShow cleanup completed" << std::endl;
 }
 
 bool DirectShowCapture::StartCapture(const std::string& deviceName, FrameCallback callback) {
@@ -95,15 +133,8 @@ bool DirectShowCapture::StartCapture(const std::string& deviceName, FrameCallbac
     }
     std::cout << "DirectShow capture started successfully" << std::endl;
     
-    // 启动一个监控线程来检查帧率
-    std::thread([this]() {
-        int lastFrameCount = 0;
-        for (int i = 0; i < 10 && m_capturing; i++) {
-            Sleep(1000); // 等待1秒
-            // 这里可以添加帧计数检查
-            std::cout << "Monitoring: " << (i + 1) << " seconds elapsed" << std::endl;
-        }
-    }).detach();
+    // 不使用detached线程，避免程序退出时的竞争条件
+    // 监控功能暂时移除，以避免多线程问题
     
     return true;
 }
@@ -113,8 +144,15 @@ void DirectShowCapture::StopCapture() {
     
     m_capturing = false;
     
-    if (m_mediaControl) {
-        m_mediaControl->Stop();
+    try {
+        if (m_mediaControl) {
+            HRESULT hr = m_mediaControl->Stop();
+            if (FAILED(hr)) {
+                std::cerr << "Failed to stop media control. HRESULT: " << std::hex << hr << std::endl;
+            }
+        }
+    } catch (...) {
+        std::cerr << "Exception during StopCapture" << std::endl;
     }
     
     std::cout << "DirectShow capture stopped" << std::endl;

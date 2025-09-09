@@ -285,8 +285,23 @@ private:
             });
             
         if (!captureStarted) {
-            std::wcerr << L"Failed to start WMF capture" << std::endl;
-            return;
+            std::wcerr << L"Failed to start WMF capture, falling back to DirectShow" << std::endl;
+            
+            // 尝试使用DirectShow作为备用
+            DirectShowDeviceEnumerator dshowEnum;
+            if (dshowEnum.Initialize()) {
+                auto dshowDevices = dshowEnum.EnumerateVideoDevices();
+                if (!dshowDevices.empty()) {
+                    RunWithDirectShow(dshowDevices);
+                    return;
+                } else {
+                    std::wcerr << L"No DirectShow devices available either" << std::endl;
+                    return;
+                }
+            } else {
+                std::wcerr << L"Failed to initialize DirectShow enumerator" << std::endl;
+                return;
+            }
         }
         
         std::wcout << L"WMF capture started successfully!" << std::endl;
@@ -654,22 +669,35 @@ private:
     }
     
     void Cleanup() {
+        // 停止所有捕获
+        m_dshowCapture.StopCapture();
+        m_wmfCapture.StopCapture();
+        m_capture.StopCapture();
+        
+        // 清理捕获对象
+        m_dshowCapture.Cleanup();
+        m_wmfCapture.Cleanup();
+        m_capture.Cleanup();
+        
+        // 清理渲染器
         if (m_renderer) {
             RendererFactory::DestroyRenderer(m_renderer);
             m_renderer = nullptr;
         }
-        m_capture.Cleanup();
         
+        // 清理OpenGL上下文
         if (m_glContext) {
             SDL_GL_DeleteContext(m_glContext);
             m_glContext = nullptr;
         }
         
+        // 清理窗口
         if (m_window) {
             SDL_DestroyWindow(m_window);
             m_window = nullptr;
         }
         
+        // 退出SDL
         SDL_Quit();
     }
 };

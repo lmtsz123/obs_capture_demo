@@ -61,16 +61,6 @@ private:
     std::vector<VkSemaphore> m_renderFinishedSemaphores;
     std::vector<VkFence> m_inFlightFences;
     
-    // 纹理相关
-    VkImage m_yTexture = VK_NULL_HANDLE;
-    VkDeviceMemory m_yTextureMemory = VK_NULL_HANDLE;
-    VkImageView m_yTextureView = VK_NULL_HANDLE;
-    VkSampler m_yTextureSampler = VK_NULL_HANDLE;
-    
-    VkImage m_uvTexture = VK_NULL_HANDLE;
-    VkDeviceMemory m_uvTextureMemory = VK_NULL_HANDLE;
-    VkImageView m_uvTextureView = VK_NULL_HANDLE;
-    VkSampler m_uvTextureSampler = VK_NULL_HANDLE;
     
     // 描述符相关
     VkDescriptorSetLayout m_descriptorSetLayout = VK_NULL_HANDLE;
@@ -82,6 +72,16 @@ private:
     VkDeviceMemory m_vertexBufferMemory = VK_NULL_HANDLE;
     VkBuffer m_indexBuffer = VK_NULL_HANDLE;
     VkDeviceMemory m_indexBufferMemory = VK_NULL_HANDLE;
+    
+    // 纹理相关
+    VkImage m_yTexture = VK_NULL_HANDLE;
+    VkDeviceMemory m_yTextureMemory = VK_NULL_HANDLE;
+    VkImageView m_yTextureView = VK_NULL_HANDLE;
+    VkImage m_uvTexture = VK_NULL_HANDLE;
+    VkDeviceMemory m_uvTextureMemory = VK_NULL_HANDLE;
+    VkImageView m_uvTextureView = VK_NULL_HANDLE;
+    VkSampler m_yTextureSampler = VK_NULL_HANDLE;
+    VkSampler m_uvTextureSampler = VK_NULL_HANDLE;
     
     // 队列族索引
     uint32_t m_graphicsFamily = UINT32_MAX;
