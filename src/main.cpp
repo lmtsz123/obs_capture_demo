@@ -19,6 +19,9 @@ using Microsoft::WRL::ComPtr;
 #include "d3d11_renderer.h"
 #include "vulkan_renderer.h"
 
+// QUICHE测试函数声明
+void TestQuicheIntegration();
+
 class Application {
 private:
     SDL_Window* m_window;
@@ -703,6 +706,11 @@ private:
 };
 
 int main(int argc, char* argv[]) {
+    // 测试QUICHE集成
+    std::cout << "=== QUICHE Integration Test ===" << std::endl;
+    TestQuicheIntegration();
+    std::cout << "=== End QUICHE Test ===" << std::endl << std::endl;
+    
     Application app;
     
     if (!app.Initialize()) {
