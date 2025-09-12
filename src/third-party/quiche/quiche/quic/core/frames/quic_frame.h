@@ -109,7 +109,7 @@ struct QUICHE_EXPORT QuicFrame {
 
 /*#if QUIC_FRAME_DEBUG
       bool delete_forbidden = false;
-#endif  */// QUIC_FRAME_DEBUG
+#endif  // QUIC_FRAME_DEBUG*/
 
       union {
         QuicAckFrame* ack_frame;

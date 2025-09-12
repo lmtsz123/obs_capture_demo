@@ -131,6 +131,10 @@ bool VulkanRenderer::Initialize(void* windowHandle) {
         return false;
     }
     
+    // 记录当前纹理尺寸
+    m_currentTextureWidth = 1080;
+    m_currentTextureHeight = 1920;
+    
     if (!CreateCommandBuffers()) {
         std::cerr << "Failed to create command buffers" << std::endl;
         return false;
@@ -326,6 +330,49 @@ bool VulkanRenderer::ConvertFrame(const uint8_t* nv12Data, int width, int height
     return true;
 }
 
+void VulkanRenderer::DestroyTextures() {
+    if (m_device == VK_NULL_HANDLE) return;
+    
+    // 等待设备空闲
+    vkDeviceWaitIdle(m_device);
+    
+    // 销毁Y纹理相关资源
+    if (m_yTextureSampler != VK_NULL_HANDLE) {
+        vkDestroySampler(m_device, m_yTextureSampler, nullptr);
+        m_yTextureSampler = VK_NULL_HANDLE;
+    }
+    if (m_yTextureView != VK_NULL_HANDLE) {
+        vkDestroyImageView(m_device, m_yTextureView, nullptr);
+        m_yTextureView = VK_NULL_HANDLE;
+    }
+    if (m_yTexture != VK_NULL_HANDLE) {
+        vkDestroyImage(m_device, m_yTexture, nullptr);
+        m_yTexture = VK_NULL_HANDLE;
+    }
+    if (m_yTextureMemory != VK_NULL_HANDLE) {
+        vkFreeMemory(m_device, m_yTextureMemory, nullptr);
+        m_yTextureMemory = VK_NULL_HANDLE;
+    }
+    
+    // 销毁UV纹理相关资源
+    if (m_uvTextureSampler != VK_NULL_HANDLE) {
+        vkDestroySampler(m_device, m_uvTextureSampler, nullptr);
+        m_uvTextureSampler = VK_NULL_HANDLE;
+    }
+    if (m_uvTextureView != VK_NULL_HANDLE) {
+        vkDestroyImageView(m_device, m_uvTextureView, nullptr);
+        m_uvTextureView = VK_NULL_HANDLE;
+    }
+    if (m_uvTexture != VK_NULL_HANDLE) {
+        vkDestroyImage(m_device, m_uvTexture, nullptr);
+        m_uvTexture = VK_NULL_HANDLE;
+    }
+    if (m_uvTextureMemory != VK_NULL_HANDLE) {
+        vkFreeMemory(m_device, m_uvTextureMemory, nullptr);
+        m_uvTextureMemory = VK_NULL_HANDLE;
+    }
+}
+
 void VulkanRenderer::RenderToScreen(const uint8_t* nv12Data, int width, int height) {
     static int renderCallCount = 0;
     renderCallCount++;
@@ -342,21 +389,34 @@ void VulkanRenderer::RenderToScreen(const uint8_t* nv12Data, int width, int heig
     }
     
     // 等待前一帧完成
-    vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
+    VkResult fenceResult = vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, 1000000000); // 1秒超时
+    if (fenceResult == VK_TIMEOUT) {
+        if (renderCallCount <= 3) {
+            std::cout << "Fence wait timeout, skipping frame" << std::endl;
+        }
+        return;
+    }
     
     // 获取下一个可用的交换链图像
     uint32_t imageIndex;
-    VkResult result = vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX, 
+    VkResult result = vkAcquireNextImageKHR(m_device, m_swapChain, 1000000000, // 1秒超时
                                            m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
     
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         // 交换链过时，需要重新创建
         if (renderCallCount <= 3) {
-            std::cout << "Swap chain out of date, skipping frame" << std::endl;
+            std::cout << "Swap chain out of date, recreating..." << std::endl;
+        }
+        RecreateSwapChain();
+        return;
+    } else if (result == VK_TIMEOUT) {
+        // 超时，跳过这一帧
+        if (renderCallCount <= 3) {
+            std::cout << "Acquire image timeout, skipping frame" << std::endl;
         }
         return;
     } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-        std::cerr << "Failed to acquire swap chain image!" << std::endl;
+        std::cerr << "Failed to acquire swap chain image! Error: " << result << std::endl;
         return;
     }
     
@@ -409,8 +469,9 @@ void VulkanRenderer::RenderToScreen(const uint8_t* nv12Data, int width, int heig
     
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         if (renderCallCount <= 3) {
-            std::cout << "Swap chain suboptimal or out of date" << std::endl;
+            std::cout << "Swap chain suboptimal or out of date, recreating..." << std::endl;
         }
+        RecreateSwapChain();
     } else if (result != VK_SUCCESS) {
         std::cerr << "Failed to present swap chain image!" << std::endl;
     }
@@ -1185,15 +1246,16 @@ bool VulkanRenderer::CreateTextures(int width, int height) {
 bool VulkanRenderer::CreateDescriptorPool() {
     std::array<VkDescriptorPoolSize, 2> poolSizes{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 4); // 增加容量以支持重新分配
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 4);
     
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT; // 允许释放单个描述符集
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
-    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 4); // 增加最大集合数
     
     if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS) {
         std::cerr << "Failed to create descriptor pool!" << std::endl;
@@ -1204,6 +1266,12 @@ bool VulkanRenderer::CreateDescriptorPool() {
     return true;
 }
 bool VulkanRenderer::CreateDescriptorSets() {
+    // 如果描述符集已经存在，先释放它们
+    if (!m_descriptorSets.empty()) {
+        vkFreeDescriptorSets(m_device, m_descriptorPool, static_cast<uint32_t>(m_descriptorSets.size()), m_descriptorSets.data());
+        m_descriptorSets.clear();
+    }
+    
     std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, m_descriptorSetLayout);
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -1294,6 +1362,49 @@ uint32_t VulkanRenderer::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFla
 void VulkanRenderer::UpdateTextures(const uint8_t* nv12Data, int width, int height) {
     if (!nv12Data) return;
     
+    std::cout << "VulkanRenderer::UpdateTextures - Size: " << width << "x" << height << std::endl;
+    
+    // 调试：检查NV12数据的前几个字节
+    if (width == 780 && height == 438) {
+        std::cout << "NV12 Debug - First Y values: ";
+        for (int i = 0; i < std::min(10, width * height); i++) {
+            std::cout << (int)nv12Data[i] << " ";
+        }
+        std::cout << std::endl;
+        
+        size_t ySize = width * height;
+        std::cout << "NV12 Debug - First UV values: ";
+        for (int i = 0; i < std::min(20, (width/2) * (height/2) * 2); i++) {
+            std::cout << (int)nv12Data[ySize + i] << " ";
+        }
+        std::cout << std::endl;
+    }
+    
+    // 检查纹理尺寸是否改变
+    if (width != m_currentTextureWidth || height != m_currentTextureHeight) {
+        std::cout << "Texture size changed from " << m_currentTextureWidth << "x" << m_currentTextureHeight 
+                  << " to " << width << "x" << height << ", recreating textures..." << std::endl;
+        
+        // 销毁旧纹理
+        DestroyTextures();
+        
+        // 创建新纹理
+        if (!CreateTextures(width, height)) {
+            std::cerr << "Failed to recreate textures with new size!" << std::endl;
+            return;
+        }
+        
+        // 更新当前纹理尺寸
+        m_currentTextureWidth = width;
+        m_currentTextureHeight = height;
+        
+        // 重新创建描述符集以使用新纹理
+        if (!CreateDescriptorSets()) {
+            std::cerr << "Failed to recreate descriptor sets!" << std::endl;
+            return;
+        }
+    }
+    
     // 计算NV12格式的数据大小
     size_t ySize = width * height;
     size_t uvSize = (width / 2) * (height / 2) * 2; // UV交错存储
@@ -1325,12 +1436,18 @@ void VulkanRenderer::UpdateTextures(const uint8_t* nv12Data, int width, int heig
     vkUnmapMemory(m_device, uvStagingBufferMemory);
     
     // 转换图像布局并复制数据
-    TransitionImageLayout(m_yTexture, VK_FORMAT_R8_UNORM, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    CopyBufferToImage(yStagingBuffer, m_yTexture, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+    // 确保图像尺寸匹配
+    uint32_t yWidth = static_cast<uint32_t>(width);
+    uint32_t yHeight = static_cast<uint32_t>(height);
+    uint32_t uvWidth = static_cast<uint32_t>(width / 2);
+    uint32_t uvHeight = static_cast<uint32_t>(height / 2);
+    
+    TransitionImageLayout(m_yTexture, VK_FORMAT_R8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    CopyBufferToImage(yStagingBuffer, m_yTexture, yWidth, yHeight);
     TransitionImageLayout(m_yTexture, VK_FORMAT_R8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     
-    TransitionImageLayout(m_uvTexture, VK_FORMAT_R8G8_UNORM, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    CopyBufferToImage(uvStagingBuffer, m_uvTexture, static_cast<uint32_t>(width / 2), static_cast<uint32_t>(height / 2));
+    TransitionImageLayout(m_uvTexture, VK_FORMAT_R8G8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    CopyBufferToImage(uvStagingBuffer, m_uvTexture, uvWidth, uvHeight);
     TransitionImageLayout(m_uvTexture, VK_FORMAT_R8G8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     
     // 清理暂存缓冲区
@@ -1630,6 +1747,29 @@ void VulkanRenderer::EndSingleTimeCommands(VkCommandBuffer commandBuffer) {
     vkQueueWaitIdle(m_graphicsQueue);
     
     vkFreeCommandBuffers(m_device, m_commandPool, 1, &commandBuffer);
+}
+
+void VulkanRenderer::RecreateSwapChain() {
+    // 等待设备空闲
+    vkDeviceWaitIdle(m_device);
+    
+    // 清理旧的交换链相关资源
+    for (auto framebuffer : m_swapChainFramebuffers) {
+        vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+    }
+    
+    for (auto imageView : m_swapChainImageViews) {
+        vkDestroyImageView(m_device, imageView, nullptr);
+    }
+    
+    vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
+    
+    // 重新创建交换链和相关资源
+    CreateSwapChain();
+    CreateImageViews();
+    CreateFramebuffers();
+    
+    std::cout << "Swap chain recreated successfully" << std::endl;
 }
 
 #endif // VULKAN_AVAILABLE

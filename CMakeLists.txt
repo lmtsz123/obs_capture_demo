@@ -108,7 +108,10 @@ set(QUICHE_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/src  # 为了找到quiche_platform_impl
 )
 
-# QUICHE核心源文件 (使用实际存在的文件)
+# 定义QUIC需要的编译标志
+add_definitions(-DQUIC_FRAME_DEBUG=0)
+
+# QUICHE核心源文件 (包含QUIC协议核心实现)
 set(QUICHE_SOURCES
     # 平台抽象层 (需要自己实现)
     src/quiche_platform_impl/quiche_bug_tracker_impl.cc
@@ -116,7 +119,7 @@ set(QUICHE_SOURCES
     src/quiche_platform_impl/quiche_logging_impl.cc
     src/quiche_platform_impl/quiche_time_utils_impl.cc
     
-    # QUICHE核心文件 (使用实际存在的文件)
+    # QUICHE通用工具
     ${QUICHE_ROOT_DIR}/quiche/common/quiche_buffer_allocator.cc
     ${QUICHE_ROOT_DIR}/quiche/common/quiche_data_reader.cc
     ${QUICHE_ROOT_DIR}/quiche/common/quiche_data_writer.cc
@@ -135,6 +138,149 @@ set(QUICHE_SOURCES
     ${QUICHE_ROOT_DIR}/quiche/common/simple_buffer_allocator.cc
     ${QUICHE_ROOT_DIR}/quiche/common/structured_headers.cc
     ${QUICHE_ROOT_DIR}/quiche/common/vectorized_io_utils.cc
+    
+    # QUIC核心协议实现
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_alarm.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_bandwidth.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_blocked_writer_list.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_buffered_packet_store.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_coalesced_packet.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_config.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_connection.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_connection_alarms.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_connection_context.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_connection_id.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_connection_id_manager.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_connection_stats.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_constants.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_control_frame_manager.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_data_reader.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_data_writer.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_datagram_queue.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_default_clock.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_default_packet_writer.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_dispatcher.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_dispatcher_stats.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_error_codes.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_flow_controller.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_framer.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_generic_session.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_idle_network_detector.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_mtu_discovery.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_network_blackhole_detector.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_packet_creator.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_packet_number.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_packet_reader.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_packet_writer_wrapper.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_packets.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_path_validator.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_ping_manager.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_queue_alarm_factory.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_received_packet_manager.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_sent_packet_manager.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_server_id.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_session.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_socket_address_coder.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_stream.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_stream_id_manager.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_stream_priority.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_stream_send_buffer.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_stream_send_buffer_base.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_stream_sequencer.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_stream_sequencer_buffer.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_tag.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_time.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_time_wait_list_manager.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_transmission_info.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_types.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_unacked_packet_map.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_utils.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_version_manager.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_versions.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_write_blocked_list.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/deterministic_connection_id_generator.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/legacy_quic_stream_id_manager.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/uber_quic_stream_id_manager.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/uber_received_packet_manager.cc
+    
+    # QUIC帧处理
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_ack_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_ack_frequency_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_blocked_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_connection_close_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_crypto_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_datagram_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_goaway_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_handshake_done_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_max_streams_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_new_connection_id_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_new_token_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_padding_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_path_challenge_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_path_response_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_ping_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_retire_connection_id_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_rst_stream_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_stop_sending_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_stream_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_streams_blocked_frame.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/frames/quic_window_update_frame.cc
+    
+    # QUIC加密实现
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/aead_base_decrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/aead_base_encrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/aes_128_gcm_12_decrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/aes_128_gcm_12_encrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/aes_128_gcm_decrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/aes_128_gcm_encrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/aes_256_gcm_decrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/aes_256_gcm_encrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/aes_base_decrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/aes_base_encrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/chacha_base_decrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/chacha_base_encrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/chacha20_poly1305_decrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/chacha20_poly1305_encrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/chacha20_poly1305_tls_decrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/chacha20_poly1305_tls_encrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/crypto_framer.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/crypto_handshake.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/crypto_handshake_message.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/crypto_utils.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/null_decrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/null_encrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/quic_crypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/quic_crypto_client_config.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/quic_crypto_server_config.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/quic_decrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/quic_encrypter.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/quic_hkdf.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/crypto/transport_parameters.cc
+    
+    # QUIC握手实现
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_crypto_client_handshaker.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_crypto_client_stream.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_crypto_handshaker.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_crypto_server_stream.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_crypto_server_stream_base.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/quic_crypto_stream.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/tls_client_handshaker.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/tls_handshaker.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/tls_server_handshaker.cc
+    
+    # 拥塞控制算法
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/congestion_control/bandwidth_sampler.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/congestion_control/bbr_sender.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/congestion_control/cubic_bytes.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/congestion_control/general_loss_algorithm.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/congestion_control/hybrid_slow_start.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/congestion_control/pacing_sender.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/congestion_control/prr_sender.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/congestion_control/rtt_stats.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/congestion_control/send_algorithm_interface.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/congestion_control/tcp_cubic_sender_bytes.cc
+    ${QUICHE_ROOT_DIR}/quiche/quic/core/congestion_control/uber_loss_algorithm.cc
 )
 
 # QUICHE静态链接定义
@@ -172,6 +318,7 @@ set(SOURCES
     src/dshow_capture.cpp
     src/wmf_capture.cpp
     src/quic_test.cpp
+    src/url/url_parse.cc
     ${QUICHE_SOURCES}
 )
 
@@ -257,3 +404,65 @@ if(GLSLC)
 else()
     message(WARNING "glslc not found. Vulkan shaders will not be compiled.")
 endif()
+
+# 生成QUIC protobuf文件
+set(QUICHE_PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/third-party/quiche/quiche/quic/core/proto)
+set(QUICHE_PROTO_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+
+file(MAKE_DIRECTORY ${QUICHE_PROTO_OUTPUT_DIR})
+
+# 生成cached_network_parameters.pb.h和.pb.cc
+add_custom_command(
+    OUTPUT 
+        ${QUICHE_PROTO_OUTPUT_DIR}/quiche/quic/core/proto/cached_network_parameters.pb.h
+        ${QUICHE_PROTO_OUTPUT_DIR}/quiche/quic/core/proto/cached_network_parameters.pb.cc
+    COMMAND 
+        $<TARGET_FILE:protobuf::protoc> 
+        --cpp_out=${QUICHE_PROTO_OUTPUT_DIR}
+        --proto_path=${CMAKE_CURRENT_SOURCE_DIR}/src/third-party
+        src/third-party/quiche/quiche/quic/core/proto/cached_network_parameters.proto
+    DEPENDS 
+        ${QUICHE_PROTO_DIR}/cached_network_parameters.proto
+        protobuf::protoc
+    COMMENT "Generating cached_network_parameters protobuf files"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# 生成source_address_token.pb.h和.pb.cc
+add_custom_command(
+    OUTPUT 
+        ${QUICHE_PROTO_OUTPUT_DIR}/quiche/quic/core/proto/source_address_token.pb.h
+        ${QUICHE_PROTO_OUTPUT_DIR}/quiche/quic/core/proto/source_address_token.pb.cc
+    COMMAND 
+        $<TARGET_FILE:protobuf::protoc> 
+        --cpp_out=${QUICHE_PROTO_OUTPUT_DIR}
+        --proto_path=${CMAKE_CURRENT_SOURCE_DIR}/src/third-party
+        src/third-party/quiche/quiche/quic/core/proto/source_address_token.proto
+    DEPENDS 
+        ${QUICHE_PROTO_DIR}/source_address_token.proto
+        ${QUICHE_PROTO_DIR}/cached_network_parameters.proto
+        protobuf::protoc
+    COMMENT "Generating source_address_token protobuf files"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# 创建protobuf目标
+add_custom_target(quiche_protos
+    DEPENDS 
+        ${QUICHE_PROTO_OUTPUT_DIR}/quiche/quic/core/proto/cached_network_parameters.pb.h
+        ${QUICHE_PROTO_OUTPUT_DIR}/quiche/quic/core/proto/source_address_token.pb.h
+)
+
+# 让主目标依赖protobuf生成
+add_dependencies(${PROJECT_NAME} quiche_protos)
+
+# 添加生成的protobuf源文件到目标
+target_sources(${PROJECT_NAME} PRIVATE
+    ${QUICHE_PROTO_OUTPUT_DIR}/quiche/quic/core/proto/cached_network_parameters.pb.cc
+    ${QUICHE_PROTO_OUTPUT_DIR}/quiche/quic/core/proto/source_address_token.pb.cc
+)
+
+# 添加生成的proto包含目录
+target_include_directories(${PROJECT_NAME} PRIVATE 
+    ${CMAKE_CURRENT_BINARY_DIR}/generated
+)

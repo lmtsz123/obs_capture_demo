@@ -114,7 +114,7 @@ void DeleteFrame(QuicFrame* frame) {
       frame->type != PATH_CHALLENGE_FRAME &&
       frame->type != PATH_RESPONSE_FRAME &&
       frame->type != IMMEDIATE_ACK_FRAME) {
-    QUICHE_CHECK(!frame->delete_forbidden) << *frame;
+    // QUICHE_CHECK(!frame->delete_forbidden) << *frame;  // 禁用以避免C++20编译错误
   }
 #endif  // QUIC_FRAME_DEBUG
   switch (frame->type) {

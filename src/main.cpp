@@ -629,8 +629,8 @@ private:
                 
                 // UV分量（每2x2像素一个）
                 if (x % 2 == 0 && y % 2 == 0) {
-                    int uvIndex = (y / 2) * width + (x / 2) * 2;
-                    if (uvIndex + 1 < width * height / 2) {
+                    int uvIndex = (y / 2) * (width / 2) * 2 + (x / 2) * 2;  // 修正UV索引计算
+                    if (uvIndex + 1 < (width / 2) * (height / 2) * 2) {
                         uvPlane[uvIndex] = (uint8_t)(128 - 0.168736 * r - 0.331264 * g + 0.5 * b);     // U
                         uvPlane[uvIndex + 1] = (uint8_t)(128 + 0.5 * r - 0.418688 * g - 0.081312 * b); // V
                     }

@@ -91,6 +91,10 @@ private:
     size_t m_currentFrame = 0;
     static const int MAX_FRAMES_IN_FLIGHT = 2;
     
+    // 当前纹理尺寸
+    int m_currentTextureWidth = 0;
+    int m_currentTextureHeight = 0;
+    
     // 窗口句柄
     void* m_windowHandle = nullptr;
     
@@ -101,6 +105,7 @@ private:
     bool CreateLogicalDevice();
     bool CreateSwapChain();
     bool CreateImageViews();
+    void RecreateSwapChain();
     bool CreateRenderPass();
     bool CreateDescriptorSetLayout();
     bool CreateGraphicsPipeline();
@@ -109,6 +114,7 @@ private:
     bool CreateVertexBuffer();
     bool CreateIndexBuffer();
     bool CreateTextures(int width, int height);
+    void DestroyTextures();
     bool CreateDescriptorPool();
     bool CreateDescriptorSets();
     bool CreateCommandBuffers();

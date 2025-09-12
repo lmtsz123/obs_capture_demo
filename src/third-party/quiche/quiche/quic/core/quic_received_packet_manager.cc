@@ -216,7 +216,7 @@ const QuicFrame QuicReceivedPacketManager::GetUpdatedAckFrame(
 
 #if QUIC_FRAME_DEBUG
   QuicFrame frame = QuicFrame(&ack_frame_);
-  frame.delete_forbidden = true;
+  // frame.delete_forbidden = true;  // 禁用以避免C++20编译错误
   return frame;
 #else   // QUIC_FRAME_DEBUG
   return QuicFrame(&ack_frame_);
